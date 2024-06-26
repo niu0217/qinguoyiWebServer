@@ -67,11 +67,11 @@ MYSQL *connection_pool::GetConnection()
 	if (0 == connList.size())
 		return NULL;
 
-	reserve.wait();
+	reserve.wait();  // 信号量减1，信号量变为0的时候会阻塞当前线程
 	
 	lock.lock();
 
-	con = connList.front();
+	con = connList.front(); // 取连接池中的最前面的一个
 	connList.pop_front();
 
 	--m_FreeConn;
@@ -89,20 +89,19 @@ bool connection_pool::ReleaseConnection(MYSQL *con)
 
 	lock.lock();
 
-	connList.push_back(con);
+	connList.push_back(con);  // 将释放的连接放到连接池的末尾
 	++m_FreeConn;
 	--m_CurConn;
 
 	lock.unlock();
 
-	reserve.post();
+	reserve.post(); // 信号量值+1
 	return true;
 }
 
 //销毁数据库连接池
 void connection_pool::DestroyPool()
 {
-
 	lock.lock();
 	if (connList.size() > 0)
 	{
@@ -131,13 +130,15 @@ connection_pool::~connection_pool()
 	DestroyPool();
 }
 
-connectionRAII::connectionRAII(MYSQL **SQL, connection_pool *connPool){
+connectionRAII::connectionRAII(MYSQL **SQL, connection_pool *connPool)
+{
 	*SQL = connPool->GetConnection();
 	
 	conRAII = *SQL;
 	poolRAII = connPool;
 }
 
-connectionRAII::~connectionRAII(){
+connectionRAII::~connectionRAII()
+{
 	poolRAII->ReleaseConnection(conRAII);
 }

@@ -14,5 +14,7 @@
             "username": "root",
             "password": "001125"
         }
-    ]
+    ],
+    "editor.formatOnPaste": false,
+    "editor.formatOnSave": false
 }
