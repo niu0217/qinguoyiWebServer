@@ -16,5 +16,9 @@
         }
     ],
     "editor.formatOnPaste": false,
-    "editor.formatOnSave": false
+    "editor.formatOnSave": false,
+    "files.associations": {
+        "*.tcc": "cpp",
+        "ostream": "cpp"
+    }
 }

@@ -157,8 +157,7 @@ void Log::write_log(int level, const char *format, ...)
 
 void Log::flush(void)
 {
-    m_mutex.lock();
+    LockerGuard locked(m_mutex);
     //强制刷新写入流缓冲区
     fflush(m_fp);
-    m_mutex.unlock();
 }

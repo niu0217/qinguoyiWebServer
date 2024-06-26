@@ -120,7 +120,6 @@ public:
         LockerGuard locked(m_mutex);
         if (m_size >= m_max_size)
         {
-
             m_cond.broadcast();
             return false;
         }
