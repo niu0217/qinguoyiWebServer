@@ -28,7 +28,7 @@ void sort_timer_lst::add_timer(util_timer *timer)
         head = tail = timer;
         return;
     }
-    if (timer->expire < head->expire)
+    if (timer->expire < head->expire)  // 直接插入到最前面
     {
         timer->next = head;
         head->prev = timer;
@@ -68,21 +68,21 @@ void sort_timer_lst::del_timer(util_timer *timer)
     {
         return;
     }
-    if ((timer == head) && (timer == tail))
+    if ((timer == head) && (timer == tail))  // 只有一个元素
     {
         delete timer;
         head = NULL;
         tail = NULL;
         return;
     }
-    if (timer == head)
+    if (timer == head)   // 不止一个元素，但是删除的是头节点
     {
         head = head->next;
         head->prev = NULL;
         delete timer;
         return;
     }
-    if (timer == tail)
+    if (timer == tail)  // 删除的是尾节点
     {
         tail = tail->prev;
         tail->next = NULL;
@@ -100,22 +100,23 @@ void sort_timer_lst::tick()
         return;
     }
     
-    time_t cur = time(NULL);
+    time_t cur = time(NULL);   // 取得当前时间戳
     util_timer *tmp = head;
     while (tmp)
     {
         if (cur < tmp->expire)
         {
+            // 说明没有过期的定时器
             break;
         }
-        tmp->cb_func(tmp->user_data);
+        tmp->cb_func(tmp->user_data);  // 调用该定时器的回调函数处理超时
         head = tmp->next;
         if (head)
         {
             head->prev = NULL;
         }
         delete tmp;
-        tmp = head;
+        tmp = head;  // 从头处理定时器超时事件
     }
 }
 
@@ -136,7 +137,7 @@ void sort_timer_lst::add_timer(util_timer *timer, util_timer *lst_head)
         prev = tmp;
         tmp = tmp->next;
     }
-    if (!tmp)
+    if (!tmp)   // 将定时器插入到最后
     {
         prev->next = timer;
         timer->prev = prev;

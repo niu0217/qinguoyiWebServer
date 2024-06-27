@@ -26,6 +26,7 @@
 
 class util_timer;
 
+// 连接资源
 struct client_data
 {
     sockaddr_in address;
@@ -33,13 +34,14 @@ struct client_data
     util_timer *timer;
 };
 
+// 定时器类
 class util_timer
 {
 public:
     util_timer() : prev(NULL), next(NULL) {}
 
 public:
-    time_t expire;
+    time_t expire;  // 定时器超时时间
     
     void (* cb_func)(client_data *);
     client_data *user_data;
@@ -56,7 +58,7 @@ public:
     void add_timer(util_timer *timer);
     void adjust_timer(util_timer *timer);
     void del_timer(util_timer *timer);
-    void tick();
+    void tick();  // 定时任务处理函数
 
 private:
     void add_timer(util_timer *timer, util_timer *lst_head);

@@ -101,19 +101,20 @@ void threadpool<T>::run()
 {
     while (true)
     {
-        m_queuestat.wait();
+        m_queuestat.wait();  // 为0的时候就会阻塞，直到变为大于等于1
         m_queuelocker.lock();
         if (m_workqueue.empty())
         {
             m_queuelocker.unlock();
             continue;
         }
-        T *request = m_workqueue.front();
+        // 到这里说明请求队列中有任务需要处理
+        T *request = m_workqueue.front();  // 取任务队列第一个出来处理
         m_workqueue.pop_front();
         m_queuelocker.unlock();
         if (!request)
             continue;
-        if (1 == m_actor_model)
+        if (1 == m_actor_model)  // reactor模式
         {
             if (0 == request->m_state)
             {
@@ -142,7 +143,7 @@ void threadpool<T>::run()
                 }
             }
         }
-        else
+        else  // proactor 模式（默认）
         {
             connectionRAII mysqlcon(&request->mysql, m_connPool);
             request->process();
