@@ -2,7 +2,7 @@ CXX ?= g++
 
 DEBUG ?= 1
 ifeq ($(DEBUG), 1)
-    CXXFLAGS += -g
+    CXXFLAGS += -g -O0
 else
     CXXFLAGS += -O2
 
