@@ -201,7 +201,7 @@ bool WebServer::dealclientdata()
 {
     struct sockaddr_in client_address;
     socklen_t client_addrlength = sizeof(client_address);
-    if (0 == m_LISTENTrigmode)
+    if (0 == m_LISTENTrigmode)  // LT水平触发
     {
         int connfd = accept(m_listenfd, (struct sockaddr *)&client_address, &client_addrlength);
         if (connfd < 0)
@@ -218,7 +218,7 @@ bool WebServer::dealclientdata()
         timer(connfd, client_address);
     }
 
-    else
+    else  // ET非阻塞边缘触发
     {
         while (1)
         {
@@ -381,6 +381,7 @@ void WebServer::eventLoop()
 
     while (!stop_server)
     {
+        // 等待所监控文件描述符上有事件发生
         int number = epoll_wait(m_epollfd, events, MAX_EVENT_NUMBER, -1);
         if (number < 0 && errno != EINTR)
         {
@@ -388,6 +389,7 @@ void WebServer::eventLoop()
             break;
         }
 
+        // 对所有就绪事件进行处理
         for (int i = 0; i < number; i++)
         {
             int sockfd = events[i].data.fd;

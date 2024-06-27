@@ -56,13 +56,14 @@ int setnonblocking(int fd)
     return old_option;
 }
 
-//将内核事件表注册读事件，ET模式，选择开启EPOLLONESHOT
+// 将内核事件表注册读事件，ET模式，选择开启EPOLLONESHOT
+// EPOLLONESHOT：为了避免多个线程同时处理同一个描述符引起的竞争条件
 void addfd(int epollfd, int fd, bool one_shot, int TRIGMode)
 {
     epoll_event event;
     event.data.fd = fd;
 
-    if (1 == TRIGMode)
+    if (1 == TRIGMode)  // ET模式
         event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
     else
         event.events = EPOLLIN | EPOLLRDHUP;
@@ -167,10 +168,12 @@ http_conn::LINE_STATUS http_conn::parse_line()
     for (; m_checked_idx < m_read_idx; ++m_checked_idx)
     {
         temp = m_read_buf[m_checked_idx];
-        if (temp == '\r')
+        if (temp == '\r')  // 有可能会读取到完整行
         {
+            // 下一个字符到了buffer的末尾，则接收不完整，需要继续接收
             if ((m_checked_idx + 1) == m_read_idx)
                 return LINE_OPEN;
+            // 下一个字符是 \n 则将 \r\n 改为 \0\0
             else if (m_read_buf[m_checked_idx + 1] == '\n')
             {
                 m_read_buf[m_checked_idx++] = '\0';
@@ -179,7 +182,7 @@ http_conn::LINE_STATUS http_conn::parse_line()
             }
             return LINE_BAD;
         }
-        else if (temp == '\n')
+        else if (temp == '\n')  // 有可能会读取到完整行
         {
             if (m_checked_idx > 1 && m_read_buf[m_checked_idx - 1] == '\r')
             {
@@ -350,6 +353,7 @@ http_conn::HTTP_CODE http_conn::process_read()
         text = get_line();
         m_start_line = m_checked_idx;
         LOG_INFO("%s", text);
+        // 主状态机的三种状态转移逻辑
         switch (m_check_state)
         {
         case CHECK_STATE_REQUESTLINE:
@@ -366,6 +370,7 @@ http_conn::HTTP_CODE http_conn::process_read()
                 return BAD_REQUEST;
             else if (ret == GET_REQUEST)
             {
+                // 完整解析GET请求后，跳转到报文响应函数
                 return do_request();
             }
             break;
@@ -375,6 +380,7 @@ http_conn::HTTP_CODE http_conn::process_read()
             ret = parse_content(text);
             if (ret == GET_REQUEST)
                 return do_request();
+            // 解析完消息体即完成报文解析，避免再次进入循环，更新 line_status
             line_status = LINE_OPEN;
             break;
         }
@@ -393,6 +399,7 @@ http_conn::HTTP_CODE http_conn::do_request()
     const char *p = strrchr(m_url, '/');
 
     //处理cgi
+    //实现登陆和注册校验
     if (cgi == 1 && (*(p + 1) == '2' || *(p + 1) == '3'))
     {
 
@@ -456,6 +463,7 @@ http_conn::HTTP_CODE http_conn::do_request()
         }
     }
 
+    // 如果请求资源为/0，表示跳转注册界面
     if (*(p + 1) == '0')
     {
         char *m_url_real = (char *)malloc(sizeof(char) * 200);
@@ -464,6 +472,7 @@ http_conn::HTTP_CODE http_conn::do_request()
 
         free(m_url_real);
     }
+    // 如果请求资源为/1，表示跳转登录界面
     else if (*(p + 1) == '1')
     {
         char *m_url_real = (char *)malloc(sizeof(char) * 200);
@@ -499,15 +508,19 @@ http_conn::HTTP_CODE http_conn::do_request()
     else
         strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
 
+    // 通过stat获取请求资源文件信息，成功则将信息更新到 m_file_stat
     if (stat(m_real_file, &m_file_stat) < 0)
         return NO_RESOURCE;
 
+    // 判断文件的权限，是否可读
     if (!(m_file_stat.st_mode & S_IROTH))
         return FORBIDDEN_REQUEST;
 
+    // 判断文件的类型
     if (S_ISDIR(m_file_stat.st_mode))
         return BAD_REQUEST;
 
+    // 以只读方式获取文件描述符，通过mmap将该文件映射到内存中
     int fd = open(m_real_file, O_RDONLY);
     m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
@@ -525,6 +538,8 @@ bool http_conn::write()
 {
     int temp = 0;
 
+    // 发送的数据长度为0
+    // 表示响应报文为空 一般不会出现
     if (bytes_to_send == 0)
     {
         modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
@@ -534,15 +549,17 @@ bool http_conn::write()
 
     while (1)
     {
+        // 将响应报文的状态行、消息头、空行和响应正文发送给浏览器端
         temp = writev(m_sockfd, m_iv, m_iv_count);
 
         if (temp < 0)
         {
-            if (errno == EAGAIN)
+            if (errno == EAGAIN)  // 缓冲区满了
             {
                 modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode);
                 return true;
             }
+            // 如果缓冲区没有满，则取消映射
             unmap();
             return false;
         }
@@ -566,9 +583,9 @@ bool http_conn::write()
             unmap();
             modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
 
-            if (m_linger)
+            if (m_linger)  // 浏览器的请求为长连接
             {
-                init();
+                init();  // 重新初始化HTTP对象
                 return true;
             }
             else
@@ -630,6 +647,7 @@ bool http_conn::process_write(HTTP_CODE ret)
 {
     switch (ret)
     {
+    // 内部错误 500
     case INTERNAL_ERROR:
     {
         add_status_line(500, error_500_title);
@@ -638,6 +656,7 @@ bool http_conn::process_write(HTTP_CODE ret)
             return false;
         break;
     }
+    // 404
     case BAD_REQUEST:
     {
         add_status_line(404, error_404_title);
@@ -646,6 +665,7 @@ bool http_conn::process_write(HTTP_CODE ret)
             return false;
         break;
     }
+    // 403
     case FORBIDDEN_REQUEST:
     {
         add_status_line(403, error_403_title);
@@ -654,6 +674,7 @@ bool http_conn::process_write(HTTP_CODE ret)
             return false;
         break;
     }
+    // 200
     case FILE_REQUEST:
     {
         add_status_line(200, ok_200_title);
@@ -670,6 +691,7 @@ bool http_conn::process_write(HTTP_CODE ret)
         }
         else
         {
+            // 如果请求的资源大小为0，则返回空白html文件
             const char *ok_string = "<html><body></body></html>";
             add_headers(strlen(ok_string));
             if (!add_content(ok_string))
@@ -690,6 +712,7 @@ void http_conn::process()
     HTTP_CODE read_ret = process_read();
     if (read_ret == NO_REQUEST)
     {
+        // NO_REQUEST 请求不完整，需要继续接收请求数据
         modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
         return;
     }
